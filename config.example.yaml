@@ -1,0 +1,13 @@
+# NapCat 的正向 WebSocket 服务端；不要填 WebUI 的 6099 端口或 /api 路径。
+ws_url: "ws://127.0.0.1:3001"
+access_token: "CHANGE_ME"
+# null 表示通过 get_login_info 自动获取；填写 QQ 号则额外校验登录账号。
+self_id: null
+cooldown_seconds: 3
+dedup_seconds: 30
+# 全局最短发送间隔；超出时丢弃，不积压补发。
+global_interval_seconds: 1
+max_event_age_seconds: 30
+api_timeout_seconds: 10
+reconnect_seconds: 3
+enable_logs: true
