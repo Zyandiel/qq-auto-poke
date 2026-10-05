@@ -43,6 +43,7 @@ Framework 的 [官方 nativeLoader.cjs 源码](https://github.com/NapNeko/NapCat
 - 双击 `scripts/windows/start.cmd`：启动普通 QQ 窗口中的 NapCat Framework，并启动本项目 Python 程序。首次启动按 QQ 提示登录；反戳程序会等待 OneBot 就绪并自动连接。
 - 双击 `scripts/windows/logs.cmd`：持续查看 `runtime.log`。看到“开始监听”后，请另一位成员在共同群中戳你一次，并核对群内的反戳提示。用 `Ctrl+C` 退出日志查看。
 - 双击 `scripts/windows/stop.cmd`：只停止当前项目的 Python 反戳程序，也包含 Windows 虚拟环境启动的实际 Python 子进程。QQ 与 NapCat 仍运行，可以继续聊天；退出 QQ 请使用 QQ 自己的托盘菜单。
+- 双击 `scripts/windows/restart.cmd`：重新启动本项目的 Python 反戳程序，保留 QQ 与 NapCat。更新源码或希望手动刷新监听时使用。
 
 已加载同一路径 `napiloader.dll` 的 QQ 主进程会被识别并复用；QQ 的 renderer/GPU 子进程无需全部加载 DLL。官方 `napimain.exe` 在注入后可能退出，脚本因此检查 QQ 内加载的 DLL，不以加载器是否仍运行判断。重复启动也会检查当前项目的 Python 进程：只匹配首个脚本参数为本项目 `main.py` 完整路径的 `python.exe` / `pythonw.exe`，包含虚拟环境 redirector 与实际 worker，不限定解释器安装路径。
 
@@ -69,3 +70,5 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\manage
 | 只有加载器启动提示，没有 QQ | 检查项目 `logs/napcat-launch.stderr.log` 和对应官方版本说明；文件存在检查不会验证 DLL 与 QQ 是否兼容。 |
 
 PowerShell 脚本兼容 Windows PowerShell 5.1；`.cmd` 使用系统 `powershell.exe`。启动脚本只影响本次进程的环境变量，不写入系统环境变量。日志会包含群号和成员 QQ 号，应保留在本机，不上传 GitHub。
+
+电脑断网或休眠后，新版 Python 会定期调用 `get_status`，在 QQ 恢复时刷新监听连接。若 QQ 能聊天，但一直没有群事件，可先使用 `restart.cmd`；仍无效时退出 QQ，再用 `start.cmd` 重新加载 NapCat。仅重启 Python 不能保证修复 NapCat 内部的事件监听故障。QQ 要求重新登录时请按提示完成。

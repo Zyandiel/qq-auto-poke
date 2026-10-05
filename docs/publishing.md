@@ -41,3 +41,12 @@ git branch -M main
 上传后 GitHub Actions 会在 Windows / Linux 和 Python 3.11 / 3.14 上执行单元测试及本地 WebSocket 集成测试。测试不需要 QQ 账号、NapCat 或 GitHub Secrets。Windows 任务还会检查 PowerShell 脚本语法。
 
 本地通过仅表示本地环境验证完成，其他平台是否通过，以 GitHub Actions 实际结果为准。
+
+## 后续版本发布
+
+1. 在 `README.md` 与 `CHANGELOG.md` 更新版本号、日期、变更和已知限制。兼容旧配置的缺陷修复使用补丁版本，例如 `v1.0.0` → `v1.0.1`。
+2. 运行测试、检查实际提交文件与差异，然后提交并推送到 `main`。等待本次提交对应的全部 GitHub Actions 任务通过。
+3. 对通过验证的提交创建带说明的 Git 标签，再将标签推送到 GitHub。不要移动已发布的标签。
+4. 创建同名 GitHub Release，说明修复内容、升级步骤与限制。附加仅包含公开源码的 ZIP，以及对应 SHA-256 校验文件；源码包应包含测试、模板和启动脚本。
+
+从旧版升级时保留本地 `config.yaml`、`launcher.local.json` 和 Python 环境。发布包不能包含这些文件，也不能包含 QQ / NapCat 安装文件、运行日志或登录数据。

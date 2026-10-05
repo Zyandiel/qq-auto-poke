@@ -1,6 +1,10 @@
 # QQ 群自动反戳
 
-当前版本：**v1.0.0**。版本变化见 [CHANGELOG](CHANGELOG.md)。
+[![Tests](https://github.com/Zyandiel/qq-auto-poke/actions/workflows/tests.yml/badge.svg)](https://github.com/Zyandiel/qq-auto-poke/actions/workflows/tests.yml)
+[![Release](https://img.shields.io/github/v/release/Zyandiel/qq-auto-poke)](https://github.com/Zyandiel/qq-auto-poke/releases/latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+当前版本：**v1.0.1**。版本变化见 [CHANGELOG](CHANGELOG.md)。
 
 其他群成员戳当前登录账号 → 收到群 poke 通知 → 在同一个群戳回发起者一次。
 
@@ -81,6 +85,8 @@ global_interval_seconds: 1
 max_event_age_seconds: 30
 api_timeout_seconds: 10
 reconnect_seconds: 3
+healthcheck_seconds: 15
+offline_reconnect_seconds: 60
 enable_logs: true
 ```
 
@@ -195,8 +201,25 @@ python3 -m venv .venv
 - 有界事件队列、单消费者、过时事件过滤，发送前登记冷却和去重。
 - API 失败或超时记录原因，不自动重试。超时可能已经执行，补发会有重复戳风险。
 - 重连会重新核对账号，并保留本进程的冷却和去重状态；退出进程后内存状态清空。
+- 定期调用 `get_status` 检查应用接口和账号状态，不仅检查 WebSocket ping / pong。接口不响应时重建连接。
+- QQ 离线时暂停反戳并丢弃事件；恢复在线后刷新监听连接并重新核对账号，不补发离线期间的通知。
 
 如果对方也是自动反戳程序且延迟超过冷却，仍可能周期性互戳。可增大冷却，或在策略入口排除该账号。没有持久存储，不承诺跨进程重启严格只发送一次。
+
+## 电脑断网、休眠后恢复
+
+从 v1.0.0 升级时，退出旧的 Python 反戳程序，用新版源码重新启动即可。保留原有 `config.yaml`、虚拟环境及 `launcher.local.json`；两个新增配置项未填写时使用默认值，运行依赖不变。使用 Windows 启动脚本时可通过 `scripts/windows/restart.cmd` 切换到更新后的源码。
+
+Python 连接的是本机 NapCat，电脑互联网断开时，本机 WS 可能一直保持连接，QQ 却已离线。`get_login_info` 还能返回缓存的 QQ 号，并不能证明账号在线。本工具启动时和运行中都会用 `get_status` 核对状态。
+
+- `healthcheck_seconds` 默认 15 秒：定期检查接口和在线状态。API 超时按 `api_timeout_seconds` 处理，然后自动重连。
+- `offline_reconnect_seconds` 默认 60 秒：持续离线达到该时长后刷新 OneBot 连接，避免长期停在旧监听会话。不会重启 QQ 或 NapCat。
+- 从离线变为在线时打印 `QQ 已恢复在线，正在重新建立监听会话`，重连及校验通过后再次打印 `开始监听所有群的戳一戳`。
+- 离线状态未改变时，不为每个 heartbeat 重复打印警告；持续离线的连接刷新仍会记录。
+
+如果恢复网络后 QQ 可以聊天，但 NapCat 仍报告离线或一直不推送群事件，问题可能在 NapCat 内部。仅重连 Python 无法保证修复；官方仓库也有 [WS 存活但账号静默离线的报告](https://github.com/NapNeko/NapCatQQ/issues/2071)。可先重启 Python；仍无效时从 QQ 托盘退出 QQ，再通过带 NapCat 的入口重新打开，按需完成登录。不要只打开普通 QQ。
+
+本工具不会自动强制关闭聊天窗口，也不会反复调用 `set_restart`。在本次核对的官方 Framework 加载方式中，重启回调可能未初始化，而 Shell 有独立的重启实现；不能把这个接口当作通用的无感恢复。QQ 要求扫码或手机验证时仍需本人完成。
 
 ## 常见问题
 
@@ -210,6 +233,7 @@ python3 -m venv .venv
 | `get_login_info` 超时 | 检查 QQ 已登录、所连的是 WS 端口，以及 QQ 与 NapCat 版本是否匹配。 |
 | 当前 QQ 不一致 | 登录目标账号，修正 `self_id`，或设为 null 跟随实际登录账号。 |
 | 已连接却无反戳 | 用其他账号在群内戳你；检查 `/api` 路径、冷却、系统时间和 NapCat 是否上报通知。 |
+| 断网恢复后持续显示离线 | 新版会定期检查并刷新监听；QQ 能聊天但仍无群事件时，参照上面的恢复说明重新启动 NapCat。 |
 | 两个账号都开自动反戳 | 冷却通常能中断快速互戳；回复间隔超过冷却时仍可能持续。可增大冷却或扩展账号过滤，当前没有配置式黑名单。 |
 | `1404` / 不支持的 API | 确认连接的是支持 `group_poke` 的 NapCat，核对实际版本。 |
 | `packetBackend发包能力不可用` | 群 poke 依赖 PacketBackend；核对 QQ / NapCat 版本、启动日志和官方高级配置，然后重启。 |
@@ -229,7 +253,7 @@ python3 -m venv .venv
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-测试覆盖事件回环、私聊与无关通知、异常字段、冷却、去重、限速、API 错误 / 超时 / 断线、鉴权、账号核对、重连、配置隐私及进程锁。GitHub Actions 配置为 Windows / Linux、Python 3.11 / 3.14，上传后自动执行。
+测试覆盖事件回环、私聊与无关通知、异常字段、冷却、去重、限速、API 错误 / 超时 / 断线、鉴权、账号核对、重连、配置隐私及进程锁；还覆盖 WS 未断但 QQ 离线、心跳 / 轮询恢复、应用接口假活以及离线事件不补发。GitHub Actions 配置为 Windows / Linux、Python 3.11 / 3.14，上传后自动执行。
 
 扩展入口是 `PokeHandler.handle_poke_event`：群开关和名单过滤放在账号校验后，统计放在接受事件后，随机延迟放在冷却登记后、发送前。加入延迟时须考虑事件过期和全局间隔。框架适配独立在 `OneBotClient.send_group_poke`。
 

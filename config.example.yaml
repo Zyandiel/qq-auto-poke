@@ -10,4 +10,8 @@ global_interval_seconds: 1
 max_event_age_seconds: 30
 api_timeout_seconds: 10
 reconnect_seconds: 3
+# 定期检查应用接口，不只依赖 WebSocket ping / pong。
+healthcheck_seconds: 15
+# 持续离线后刷新 OneBot 连接；不会重启 QQ 或 NapCat。
+offline_reconnect_seconds: 60
 enable_logs: true

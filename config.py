@@ -35,6 +35,8 @@ class Config:
     max_event_age_seconds: float = 30
     api_timeout_seconds: float = 10
     reconnect_seconds: float = 3
+    healthcheck_seconds: float = 15
+    offline_reconnect_seconds: float = 60
     enable_logs: bool = True
 
 

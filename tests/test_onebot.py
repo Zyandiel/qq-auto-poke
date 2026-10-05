@@ -29,6 +29,10 @@ class WebSocketTests(unittest.IsolatedAsyncioTestCase):
                 await ws.send(json.dumps(incoming))
                 await ws.send(json.dumps(dict(status='ok', retcode=0,
                                              data={'user_id': 123456}, echo=login['echo'])))
+                status = json.loads(await ws.recv())
+                self.assertEqual(status['action'], 'get_status')
+                await ws.send(json.dumps(dict(status='ok', retcode=0,
+                                             data={'online': True, 'good': True}, echo=status['echo'])))
                 poke = json.loads(await asyncio.wait_for(ws.recv(), 2))
                 requests.append(poke)
                 await ws.send('not json')
@@ -131,6 +135,9 @@ class WebSocketTests(unittest.IsolatedAsyncioTestCase):
             connections += 1
             login = json.loads(await ws.recv())
             await ws.send(json.dumps(dict(status='ok', retcode=0, echo=login['echo'], data={'user_id': 123456})))
+            status = json.loads(await ws.recv())
+            await ws.send(json.dumps(dict(status='ok', retcode=0, echo=status['echo'],
+                                         data={'online': True, 'good': True})))
             await ws.send(json.dumps(incoming))
             if connections == 1:
                 poke = json.loads(await ws.recv())
