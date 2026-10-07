@@ -2,6 +2,7 @@
 import asyncio
 import json
 import logging
+import math
 import time
 import uuid
 
@@ -30,6 +31,45 @@ class OneBotClient:
         self.events = asyncio.Queue(maxsize=100)
         self.online = None
         self.offline_since = None
+        self.self_id = None
+        self.clock_reference = None
+        self.reported_clock_difference = None
+
+    def observe_clock(self, event):
+        # 只有新连接的生命周期 / 心跳可以提供来源时钟；poke 不能自行校准。
+        if not isinstance(event, dict) or event.get("post_type") != "meta_event":
+            return
+        kind = event.get("meta_event_type")
+        if not (kind == "heartbeat"
+                or kind == "lifecycle" and event.get("sub_type") == "connect"):
+            return
+        own = qq_id(event.get("self_id"))
+        stamp = event.get("time")
+        if (own is None or type(stamp) not in (int, float)
+                or not 0 < stamp < 10**11 or not math.isfinite(stamp)):
+            return
+        if self.self_id is not None and own != self.self_id:
+            return
+        # 登录回包前先暂存，使用时必须匹配已核对的 self_id。
+        self.clock_reference = (own, stamp, time.monotonic())
+        self.report_clock_difference()
+
+    def event_time(self, reference):
+        if reference is None or reference[0] != self.self_id:
+            return None
+        # time 是向下取整的秒；+1 取保守上界，避免跨秒新事件被当作未来事件。
+        return reference[1] + 1 + max(0, time.monotonic() - reference[2])
+
+    def report_clock_difference(self):
+        reference = self.clock_reference
+        if reference is None or reference[0] != self.self_id:
+            return
+        difference = time.time() - (reference[1] + time.monotonic() - reference[2])
+        if (abs(difference) >= 5
+                and (self.reported_clock_difference is None
+                     or abs(difference - self.reported_clock_difference) >= 5)):
+            log.warning("NapCat 通知时钟与本机相差约 %.0f 秒，已使用同连接时间校验事件", difference)
+            self.reported_clock_difference = difference
 
     def update_status(self, status):
         if not isinstance(status, dict) or not isinstance(status.get("online"), bool):
@@ -98,6 +138,7 @@ class OneBotClient:
                     continue
                 if not isinstance(data, dict):
                     continue
+                self.observe_clock(data)
                 echo = data.get("echo")
                 if isinstance(echo, str) and echo in self.pending:
                     future = self.pending[echo]
@@ -111,7 +152,8 @@ class OneBotClient:
                     if self.events.full():
                         log.warning("事件队列已满，丢弃本次 poke")
                     else:
-                        self.events.put_nowait((time.monotonic(), data))
+                        # 保存到达时的基准；后续对时跳变不能使旧通知重新变新。
+                        self.events.put_nowait((time.monotonic(), data, self.clock_reference))
                 elif data.get("meta_event_type") == "heartbeat":
                     status = data.get("status")
                     if isinstance(status, dict) and isinstance(status.get("online"), bool):
@@ -128,11 +170,12 @@ class OneBotClient:
 
     async def process_events(self, handler, self_id):
         while True:
-            received, event = await self.events.get()
+            received, event, reference = await self.events.get()
             # 网络/接口阻塞后不集中补发排队已久的通知。
             if (self.online is True
                     and time.monotonic() - received <= self.config.max_event_age_seconds):
-                await handler.handle_poke_event(event, self_id, self.send_group_poke)
+                await handler.handle_poke_event(event, self_id, self.send_group_poke,
+                                               event_now=self.event_time(reference))
 
     async def session(self, handler):
         reader = asyncio.create_task(self.read_messages())
@@ -145,6 +188,10 @@ class OneBotClient:
                 raise APIError("get_login_info 未返回有效 user_id")
             if self.config.self_id is not None and self.config.self_id != self_id:
                 raise APIError("登录 QQ 与配置 self_id 不一致，拒绝反戳")
+            self.self_id = self_id
+            if self.clock_reference is not None and self.clock_reference[0] != self_id:
+                self.clock_reference = None
+            self.report_clock_difference()
             await self.check_status()
             if self.online:
                 log.info("已连接，当前 QQ %s，开始监听所有群的戳一戳", self_id)

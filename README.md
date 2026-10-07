@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/Zyandiel/qq-auto-poke)](https://github.com/Zyandiel/qq-auto-poke/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-当前版本：**v1.0.1**。版本变化见 [CHANGELOG](CHANGELOG.md)。
+当前版本：**v1.0.2**。版本变化见 [CHANGELOG](CHANGELOG.md)。
 
 其他群成员戳当前登录账号 → 收到群 poke 通知 → 在同一个群戳回发起者一次。
 
@@ -98,6 +98,13 @@ WebUI 登录 token 与 OneBot WS token 是不同配置。`6099` 通常是网页�
 
 ## 3. 安装并启动 Python 程序
 
+从 [最新 Release](https://github.com/Zyandiel/qq-auto-poke/releases/latest) 下载源码 ZIP 并解压，或者克隆仓库：
+
+```sh
+git clone https://github.com/Zyandiel/qq-auto-poke.git
+cd qq-auto-poke
+```
+
 安装 Python 3.11 或更新版本，在此 README 所在目录打开 PowerShell：
 
 ```powershell
@@ -190,6 +197,7 @@ python3 -m venv .venv
 - [发送实现 SendPoke.ts](https://github.com/NapNeko/NapCatQQ/blob/26d7533e0f5800fdff865ab2f2ad7692917e1076/packages/napcat-onebot/action/packet/SendPoke.ts)
 - [接口注册 router.ts](https://github.com/NapNeko/NapCatQQ/blob/26d7533e0f5800fdff865ab2f2ad7692917e1076/packages/napcat-onebot/action/router.ts)
 - [WS 鉴权与事件推送](https://github.com/NapNeko/NapCatQQ/blob/26d7533e0f5800fdff865ab2f2ad7692917e1076/packages/napcat-onebot/network/websocket-server.ts)
+- [通知时间生成](https://github.com/NapNeko/NapCatQQ/blob/26d7533e0f5800fdff865ab2f2ad7692917e1076/packages/napcat-onebot/event/OneBotEvent.ts) 与 [服务器对时实现](https://github.com/NapNeko/NapCatQQ/blob/26d7533e0f5800fdff865ab2f2ad7692917e1076/packages/napcat-core/helper/server-time.ts)
 - [官方 API](https://napneko.github.io/onebot/api)、[网络配置](https://napneko.github.io/config/basic)
 
 ## 防循环与失败处理
@@ -208,7 +216,7 @@ python3 -m venv .venv
 
 ## 电脑断网、休眠后恢复
 
-从 v1.0.0 升级时，退出旧的 Python 反戳程序，用新版源码重新启动即可。保留原有 `config.yaml`、虚拟环境及 `launcher.local.json`；两个新增配置项未填写时使用默认值，运行依赖不变。使用 Windows 启动脚本时可通过 `scripts/windows/restart.cmd` 切换到更新后的源码。
+从 v1.0.0 / v1.0.1 升级到 v1.0.2 时，退出旧的 Python 反戳程序，更新源码后重新启动即可。保留原有 `config.yaml`、虚拟环境及 `launcher.local.json`；v1.0.1 引入的状态检查配置项未填写时使用默认值，v1.0.2 不增加配置项，运行依赖不变。使用 Windows 启动脚本时可通过 `scripts/windows/restart.cmd` 切换到更新后的源码。
 
 Python 连接的是本机 NapCat，电脑互联网断开时，本机 WS 可能一直保持连接，QQ 却已离线。`get_login_info` 还能返回缓存的 QQ 号，并不能证明账号在线。本工具启动时和运行中都会用 `get_status` 核对状态。
 
@@ -217,9 +225,11 @@ Python 连接的是本机 NapCat，电脑互联网断开时，本机 WS 可能�
 - 从离线变为在线时打印 `QQ 已恢复在线，正在重新建立监听会话`，重连及校验通过后再次打印 `开始监听所有群的戳一戳`。
 - 离线状态未改变时，不为每个 heartbeat 重复打印警告；持续离线的连接刷新仍会记录。
 
+v1.0.2 修复了接口显示在线、收到新通知却因时钟偏差不反戳的问题。NapCat 会对自己的通知时间做服务器对时，休眠或断线后该时间可能与 Python 的本机时间不同。本工具以同一连接中新生成、账号匹配的生命周期 / 心跳建立通知时间基准，用单调时钟推算事件年龄；每条通知保留到达时的基准。偏差明显时会打印“NapCat 通知时钟与本机相差约 ... 秒”。没有可信基准时沿用本机时间，不使用 poke 自身校准。事件过期、队列过期、冷却和去重限制仍然生效，无需增大 `max_event_age_seconds`。若仍出现“收到戳我的群通知，但事件时间不在有效范围”，检查心跳配置和 NapCat 日志。
+
 如果恢复网络后 QQ 可以聊天，但 NapCat 仍报告离线或一直不推送群事件，问题可能在 NapCat 内部。仅重连 Python 无法保证修复；官方仓库也有 [WS 存活但账号静默离线的报告](https://github.com/NapNeko/NapCatQQ/issues/2071)。可先重启 Python；仍无效时从 QQ 托盘退出 QQ，再通过带 NapCat 的入口重新打开，按需完成登录。不要只打开普通 QQ。
 
-本工具不会自动强制关闭聊天窗口，也不会反复调用 `set_restart`。在本次核对的官方 Framework 加载方式中，重启回调可能未初始化，而 Shell 有独立的重启实现；不能把这个接口当作通用的无感恢复。QQ 要求扫码或手机验证时仍需本人完成。
+本工具不会自动强制关闭聊天窗口，也不会反复调用 `set_restart`。在上述协议核对版本的官方 Framework 加载方式中，重启回调可能未初始化，而 Shell 有独立的重启实现；不能把这个接口当作通用的无感恢复。QQ 要求扫码或手机验证时仍需本人完成。
 
 ## 常见问题
 
@@ -228,11 +238,11 @@ Python 连接的是本机 NapCat，电脑互联网断开时，本机 WS 可能�
 | 找不到配置文件 | 先复制 `config.example.yaml` 为 `config.yaml`，检查 `--config` 路径。 |
 | 配置无效 | 修改 `CHANGE_ME`，YAML 缩进用空格，对照模板检查字段。诊断不会回显配置全文或 token。 |
 | 提示同一配置已运行 | 退出原来的反戳进程再启动；遗留 `.lock` 文件本身不表示进程在运行，不需要删除。 |
-| 连接拒绝 / WinError 10061 | 启动 NapCat，启用正向 WS，核对 host / port，不要填 WebUI 的 6099。 |
+| 连接拒绝 / WinError 10061 / 1225 | 启动 NapCat，启用正向 WS，核对 host / port，不要填 WebUI 的 6099。 |
 | `1403` / 401 / 403 | 两端 WS token 必须一致，不能填 WebUI 登录密码，改完重启 Python。 |
 | `get_login_info` 超时 | 检查 QQ 已登录、所连的是 WS 端口，以及 QQ 与 NapCat 版本是否匹配。 |
 | 当前 QQ 不一致 | 登录目标账号，修正 `self_id`，或设为 null 跟随实际登录账号。 |
-| 已连接却无反戳 | 用其他账号在群内戳你；检查 `/api` 路径、冷却、系统时间和 NapCat 是否上报通知。 |
+| 已连接却无反戳 | 用其他账号在群内戳你；检查 `/api` 路径、冷却、NapCat 通知与时间诊断日志，参照上面的恢复说明。 |
 | 断网恢复后持续显示离线 | 新版会定期检查并刷新监听；QQ 能聊天但仍无群事件时，参照上面的恢复说明重新启动 NapCat。 |
 | 两个账号都开自动反戳 | 冷却通常能中断快速互戳；回复间隔超过冷却时仍可能持续。可增大冷却或扩展账号过滤，当前没有配置式黑名单。 |
 | `1404` / 不支持的 API | 确认连接的是支持 `group_poke` 的 NapCat，核对实际版本。 |
@@ -253,7 +263,7 @@ Python 连接的是本机 NapCat，电脑互联网断开时，本机 WS 可能�
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-测试覆盖事件回环、私聊与无关通知、异常字段、冷却、去重、限速、API 错误 / 超时 / 断线、鉴权、账号核对、重连、配置隐私及进程锁；还覆盖 WS 未断但 QQ 离线、心跳 / 轮询恢复、应用接口假活以及离线事件不补发。GitHub Actions 配置为 Windows / Linux、Python 3.11 / 3.14，上传后自动执行。
+测试覆盖事件回环、私聊与无关通知、异常字段、冷却、去重、限速、API 错误 / 超时 / 断线、鉴权、账号核对、重连、配置隐私及进程锁；还覆盖 WS 未断但 QQ 离线、心跳 / 轮询恢复、应用接口假活以及离线事件不补发。时间校验测试包含来源时钟快 / 慢约 10 小时、本机时间跳变、跨秒通知、排队期间来源时间跳变，以及离线恢复后重建时间基准并拒绝旧通知。GitHub Actions 配置为 Windows / Linux、Python 3.11 / 3.14，上传后自动执行。
 
 扩展入口是 `PokeHandler.handle_poke_event`：群开关和名单过滤放在账号校验后，统计放在接受事件后，随机延迟放在冷却登记后、发送前。加入延迟时须考虑事件过期和全局间隔。框架适配独立在 `OneBotClient.send_group_poke`。
 

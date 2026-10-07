@@ -18,7 +18,7 @@ git branch -M main
 
 提交前查看暂存文件及差异，确认仅包含源码、模板、测试和说明。`git commit` 如提示缺少作者信息，在本仓库设置自己的 `user.name` 与 `user.email` 后重新执行。
 
-随后在 GitHub 创建空仓库。使用页面给出的远程地址运行 `git remote add origin <仓库地址>`，再执行 `git push -u origin main`。整理和测试不代表已经替你创建或上传远程仓库。
+发布到自己的仓库时，在 GitHub 创建空仓库，使用页面给出的远程地址运行 `git remote add origin <仓库地址>`，再执行 `git push -u origin main`。
 
 ## 哪些内容不能公开
 

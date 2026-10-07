@@ -71,4 +71,4 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\manage
 
 PowerShell 脚本兼容 Windows PowerShell 5.1；`.cmd` 使用系统 `powershell.exe`。启动脚本只影响本次进程的环境变量，不写入系统环境变量。日志会包含群号和成员 QQ 号，应保留在本机，不上传 GitHub。
 
-电脑断网或休眠后，新版 Python 会定期调用 `get_status`，在 QQ 恢复时刷新监听连接。若 QQ 能聊天，但一直没有群事件，可先使用 `restart.cmd`；仍无效时退出 QQ，再用 `start.cmd` 重新加载 NapCat。仅重启 Python 不能保证修复 NapCat 内部的事件监听故障。QQ 要求重新登录时请按提示完成。
+电脑断网或休眠后，新版 Python 会定期调用 `get_status`，在 QQ 恢复时刷新监听连接，并重新建立 NapCat 通知时间基准。若日志显示明显时间偏差，v1.0.2 会自动校准事件年龄，无需延长过期时间。若 QQ 能聊天，但一直没有群事件，可先使用 `restart.cmd`；仍无效时退出 QQ，再用 `start.cmd` 重新加载 NapCat。仅重启 Python 不能保证修复 NapCat 内部的事件监听故障。QQ 要求重新登录时请按提示完成。

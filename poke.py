@@ -1,5 +1,6 @@
 """反戳策略：不依赖 WebSocket，可注入任意发送函数。"""
 import logging
+import math
 import time
 
 from config import qq_id
@@ -24,7 +25,7 @@ class PokeHandler:
         self.seen = {}
         self.last_send = float("-inf")
 
-    async def handle_poke_event(self, event, self_id, send_group_poke):
+    async def handle_poke_event(self, event, self_id, send_group_poke, *, event_now=None):
         if not is_group_poke(event):
             return False
         group, user, target, own = (
@@ -35,12 +36,18 @@ class PokeHandler:
         stamp = event.get("time")
         # NapCat 必有秒级 time；缺失、异常或陈旧的事件不补发。
         if isinstance(stamp, bool) or not isinstance(stamp, (int, float)):
+            log.warning("收到戳我的群通知，但 time 字段无效，已跳过")
             return False
         try:
-            age = self.wall_clock() - stamp
-        except OverflowError:
+            current = self.wall_clock() if event_now is None else event_now
+            if (type(current) not in (int, float) or not math.isfinite(current)
+                    or not math.isfinite(stamp)):
+                return False
+            age = current - stamp
+        except (OverflowError, ValueError):
             return False
         if not 0 <= age <= self.config.max_event_age_seconds:
+            log.warning("收到戳我的群通知，但事件时间不在有效范围（年龄 %.1f 秒），已跳过", age)
             return False
         now = self.clock()
         self.seen = {k: v for k, v in self.seen.items() if v > now}
